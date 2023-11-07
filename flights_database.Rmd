@@ -1,0 +1,193 @@
+---
+title: "Assignment 11: Flights and Weather Database"
+author: "Linh Bui"
+date: "`r Sys.Date()`"
+documentclass: article
+geometry: margin=1in
+fontsize: 11pt
+output:
+  pdf_document:
+    toc: false
+    df_print: kable
+    fig_caption: false
+    number_sections: false
+    dev: pdf
+    highlight: tango
+  html_document:
+    theme: default
+    self_contained: true
+    toc: false
+    df_print: kable
+    fig_caption: false
+    number_sections: false
+    smart: true
+    dev: svg
+---
+
+```{r setup, include = FALSE}
+# DO NOT ALTER THIS CHUNK
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  fig.width = 5,
+  fig.asp = 0.618,
+  out.width = "70%",
+  dpi = 120,
+  fig.align = "center",
+  cache = FALSE
+)
+
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(dbplyr))
+if(file.exists("nycflights13.sqlite") == FALSE){
+  dbplyr::nycflights13_sqlite(path = ".")
+}
+```
+
+
+## Exercise 1
+
+* Database connection
+
+```{r}
+con <- DBI::dbConnect(RSQLite::SQLite(), "nycflights13.sqlite")
+```
+
+## Exercise 2
+
+```{r}
+flights_tbl <- tbl(con, "flights")
+```
+
+## Exercise 3
+
+```{r}
+flights_query <- flights_tbl %>%
+  select(year, month, day, hour, dep_delay, origin)
+```
+
+
+## Exercise 4
+
+```{r}
+flights_query %>%
+  show_query()
+```
+
+
+## Exercise 5
+
+```{r}
+flights_df <- flights_query %>%
+  collect()
+```
+
+* The 'origin' column tells us the airport that a flight left from.
+
+## Exercise 6
+
+```{r}
+ggplot(flights_df) +
+  geom_histogram(aes(x = dep_delay)) +
+  labs(
+    x = "departure delay",
+    title = "The distribution of delay in departure"
+    )
+```
+
+* This is a unimodal and right-skewed distribution. It is centered around value 0. 
+
+```{r}
+flights_df %>%
+  summarize(
+    mean = mean(dep_delay, na.rm = TRUE ), 
+    median = median(dep_delay, na.rm = TRUE ), 
+    standard_deviation = sd(dep_delay, na.rm = TRUE ),
+    min = min(dep_delay, na.rm = TRUE ),
+    max = max(dep_delay, na.rm = TRUE )
+  )
+```
+
+* The standard deviation is 40.21006, which means that there was a big variation or dispersion of the set of values in the dataset. The mean value is 12.63907 while the median is only -2, which correctly reflects the skewness of the distribution (right-skewed). Most datapoints have lower values. 
+
+## Exercise 7
+
+i. What does each row in the weather table represent?
+
+* Each row represents the weather at one of these three airports at a particular hour during the year of 2013.
+
+ii. What column contains information about the amount of rain (or other precipitation) that fell?
+
+* The 'precip' column contains information about precipitation (e.g. rain, snow, etc.), in inches.
+
+iii. What column indicates the airport that each weather observation was made at?
+
+* The 'origin' column indicates the airport that each weather observation was made at.
+
+## Exercise 8
+
+```{r}
+weather_tbl <- tbl(con, "weather")
+```
+
+```{r}
+weather_query <- weather_tbl %>%
+  select(origin, year, month, day, hour, temp, wind_speed, precip)
+```
+
+```{r}
+weather_query %>%
+  show_query()
+```
+
+## Exercise 9
+
+```{r}
+joined_query <- left_join(flights_query, weather_query, 
+                          by=c("origin" = "origin", 
+                               "year" = "year",
+                               "month" = "month",
+                               "day" = "day",
+                               "hour" = "hour"))
+```
+
+* This code will keep all rows from the 'flight_query' dataframe. Any rows that are kept but not matched to a row in the 'weather_query' table will just have missing data in the 'weather_queary'’s columns.
+
+```{r}
+joined_query %>%
+  show_query()
+```
+
+## Exercise 10
+
+```{r}
+joined_df <- joined_query %>%
+  collect()
+```
+
+* Each row represents a flight that departed a New York City (NYC) airport and the weather at one of these three airports at a particular hour during the year of 2013.
+
+## Exercise 11
+
+```{r}
+joined_df %>%
+  ggplot() +
+  geom_point(aes(x = precip, y = dep_delay)) + 
+  labs(title = "Correlation between precipitation and departure delay")
+```
+
+* It can be seen that the higher or tougher the Precipitation value is, the lower the dep_delay value tends to be. Also, points concentrate more and more sparsely as the values of Precipitation in inches get higher. Therefore, it does not look like flights are more delayed when there is more rain and other precipitation. 
+
+```{r}
+joined_df %>%
+  ggplot() +
+  geom_point(aes(x = wind_speed, y = dep_delay)) + 
+  labs(title = "Correlation between wind speed and departure delay")
+```
+
+* The scatter points are concentrated fairly evenly at all wind levels. At high wind speeds above 30 (in mph), the delay rates were even lower than those at lower wind speeds. Therefore, it does not seem like flights are more delayed when there the wind speed is higher. 
+
+## Exercise 12
+
+* From the previous graphs, there is no obvious evidence that bad weather would affect the departure delay of flights in New York in 2013. The departure delay rate did not increase when the wind speed and precipitation increase. In other words, no obvious correlation between departure delay and bad weather was seen from the graphs. However, this dataset only contains flights that actually departed, not flights that were cancelled. In fact, many flights are just cancelled due to bad weather instead of being delayed to ensure safety for customers. Therefore, in order to have a more precise view about the impact of bad weather on the operations of flights, departure cancellation should also be taken into account. 
+
